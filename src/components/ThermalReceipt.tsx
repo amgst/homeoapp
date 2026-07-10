@@ -22,6 +22,8 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
   const [printed, setPrinted] = useState(false);
   const [whatsappSent, setWhatsappSent] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [directPrinting, setDirectPrinting] = useState(false);
+  const [directPrintError, setDirectPrintError] = useState('');
 
   useEffect(() => {
     const listVisits = getVisits();
@@ -68,6 +70,19 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
     setPrinted(true);
     window.print();
     setTimeout(() => setPrinted(false), 2000);
+  };
+
+  const handleDirectPrint = async () => {
+    if (!visit) return;
+    setDirectPrintError('');
+    setDirectPrinting(true);
+    try {
+      await printReceiptDirect(activePatient, visit, activeSettings);
+    } catch (err: any) {
+      setDirectPrintError(err?.message || 'Failed to print directly to the Bluetooth printer.');
+    } finally {
+      setDirectPrinting(false);
+    }
   };
 
   const handleCopyText = () => {
@@ -192,7 +207,19 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
             <span>{whatsappSent ? 'Sending...' : 'Send WhatsApp Prescription'}</span>
           </button>
 
-          <button 
+          {isWebSerialSupported() && (
+            <button
+              onClick={handleDirectPrint}
+              disabled={directPrinting}
+              className="flex items-center space-x-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
+              title="Send raw ESC/POS data directly to the paired Bluetooth printer's serial port, no OS print dialog"
+            >
+              <Bluetooth className="h-4 w-4" />
+              <span>{directPrinting ? 'Sending to Printer...' : 'Print via Bluetooth (Direct)'}</span>
+            </button>
+          )}
+
+          <button
             onClick={handlePrint}
             className="flex items-center space-x-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
           >
@@ -201,6 +228,12 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
           </button>
         </div>
       </div>
+
+      {directPrintError && (
+        <div className="no-print max-w-3xl mx-auto bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-4 py-3 rounded-xl">
+          {directPrintError}
+        </div>
+      )}
 
       {/* Urdu instructions card for mobile Bluetooth thermal printers */}
       <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2 no-print font-sans max-w-3xl mx-auto">
