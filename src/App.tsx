@@ -23,6 +23,15 @@ import SettingsView from './components/Settings';
 import ThermalReceipt from './components/ThermalReceipt';
 import ClinicHistory from './components/ClinicHistory';
 
+type Tab = 'dashboard' | 'patients' | 'history' | 'clinicHistory' | 'prescription' | 'inventory' | 'billing' | 'followup' | 'reports' | 'settings' | 'receipt';
+
+interface NavState {
+  tab: Tab;
+  patientId: string | null;
+  visitId: string;
+  billId: string;
+}
+
 export default function App() {
   // DB initialization
   useEffect(() => {
@@ -33,12 +42,49 @@ export default function App() {
   const [user, setUser] = useState<string | null>(getLoggedInUser());
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'patients' | 'history' | 'clinicHistory' | 'prescription' | 'inventory' | 'billing' | 'followup' | 'reports' | 'settings' | 'receipt'>('dashboard');
-  
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
   // Drill-down IDs
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [selectedVisitId, setSelectedVisitId] = useState<string>('');
   const [selectedBillId, setSelectedBillId] = useState<string>('');
+
+  // Pushes a browser history entry for every in-app navigation so the phone's
+  // back button / edge-swipe gesture steps back through app screens instead
+  // of exiting the app (there was previously no history entry to pop).
+  const navigateTo = (next: Partial<NavState>) => {
+    const state: NavState = {
+      tab: next.tab ?? activeTab,
+      patientId: next.patientId !== undefined ? next.patientId : selectedPatientId,
+      visitId: next.visitId !== undefined ? next.visitId : selectedVisitId,
+      billId: next.billId !== undefined ? next.billId : selectedBillId,
+    };
+    setActiveTab(state.tab);
+    setSelectedPatientId(state.patientId);
+    setSelectedVisitId(state.visitId);
+    setSelectedBillId(state.billId);
+    window.history.pushState(state, '');
+  };
+
+  // Establish a base history entry once logged in, so the first back gesture has somewhere to land.
+  useEffect(() => {
+    if (user) {
+      window.history.replaceState({ tab: 'dashboard', patientId: null, visitId: '', billId: '' }, '');
+    }
+  }, [user]);
+
+  // Handle back button / edge-swipe by restoring the popped navigation state instead of exiting.
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as NavState | null;
+      setActiveTab(state?.tab ?? 'dashboard');
+      setSelectedPatientId(state?.patientId ?? null);
+      setSelectedVisitId(state?.visitId ?? '');
+      setSelectedBillId(state?.billId ?? '');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // UI Drawer / Notifications
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -121,30 +167,25 @@ export default function App() {
   const handleDashboardAction = (action: 'new-patient' | 'search-patient' | 'new-prescription' | 'inventory' | 'reports') => {
     switch (action) {
       case 'new-patient':
-        setSelectedPatientId(null);
-        setActiveTab('patients');
+        navigateTo({ tab: 'patients', patientId: null });
         break;
       case 'search-patient':
-        setSelectedPatientId(null);
-        setActiveTab('patients');
+        navigateTo({ tab: 'patients', patientId: null });
         break;
       case 'new-prescription':
-        setSelectedPatientId(null);
-        setActiveTab('prescription');
+        navigateTo({ tab: 'prescription', patientId: null });
         break;
       case 'inventory':
-        setActiveTab('inventory');
+        navigateTo({ tab: 'inventory' });
         break;
       case 'reports':
-        setActiveTab('reports');
+        navigateTo({ tab: 'reports' });
         break;
     }
   };
 
   const handleSuccessPrescription = (visitId: string, billId: string) => {
-    setSelectedVisitId(visitId);
-    setSelectedBillId(billId);
-    setActiveTab('receipt');
+    navigateTo({ tab: 'receipt', visitId, billId });
   };
 
   if (!user) {
@@ -159,7 +200,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           
           {/* Logo Brand */}
-          <div className="flex items-center space-x-3 cursor-pointer group select-none" onClick={() => setActiveTab('dashboard')}>
+          <div className="flex items-center space-x-3 cursor-pointer group select-none" onClick={() => navigateTo({ tab: 'dashboard' })}>
             {/* Custom Circular Emblem */}
             <div className="w-11 h-11 border-2 border-emerald-500/30 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-100 shadow-md relative overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-200">
               {/* Mini Green Cross */}
@@ -321,8 +362,7 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => {
-                    setActiveTab(tab.id as any);
-                    setSelectedPatientId(null);
+                    navigateTo({ tab: tab.id as Tab, patientId: null });
                     setShowMobileMenu(false);
                   }}
                   className={`w-full flex items-center space-x-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer select-none ${
@@ -348,85 +388,52 @@ export default function App() {
           
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
-            <Dashboard 
+            <Dashboard
               onAction={handleDashboardAction}
-              onSelectPatient={(patientId) => {
-                setSelectedPatientId(patientId);
-                setActiveTab('history');
-              }}
+              onSelectPatient={(patientId) => navigateTo({ tab: 'history', patientId })}
             />
           )}
 
           {/* Patients Tab */}
           {activeTab === 'patients' && (
-            <PatientManagement 
+            <PatientManagement
               initialPatientId={selectedPatientId}
-              onSelectPatient={(patientId) => {
-                setSelectedPatientId(patientId);
-                setActiveTab('history');
-              }}
-              onGoToPrescription={(patientId) => {
-                setSelectedPatientId(patientId);
-                setActiveTab('prescription');
-              }}
+              onSelectPatient={(patientId) => navigateTo({ tab: 'history', patientId })}
+              onGoToPrescription={(patientId) => navigateTo({ tab: 'prescription', patientId })}
             />
           )}
 
           {/* Patient History Drill Down */}
           {activeTab === 'history' && selectedPatientId && (
-            <PatientHistory 
+            <PatientHistory
               patientId={selectedPatientId}
-              onBack={() => {
-                setSelectedPatientId(null);
-                setActiveTab('patients');
-              }}
-              onGoToPrescription={(patientId) => {
-                setSelectedPatientId(patientId);
-                setActiveTab('prescription');
-              }}
-              onPrintReceipt={(visitId) => {
-                setSelectedVisitId(visitId);
-                setSelectedBillId(visitId.replace('VIS', 'BILL'));
-                setActiveTab('receipt');
-              }}
+              onBack={() => navigateTo({ tab: 'patients', patientId: null })}
+              onGoToPrescription={(patientId) => navigateTo({ tab: 'prescription', patientId })}
+              onPrintReceipt={(visitId) => navigateTo({ tab: 'receipt', visitId, billId: visitId.replace('VIS', 'BILL') })}
             />
           )}
 
           {/* Prescription Builder Tab */}
           {activeTab === 'prescription' && (
-            <PrescriptionBuilder 
+            <PrescriptionBuilder
               initialPatientId={selectedPatientId}
-              onCancel={() => {
-                setSelectedPatientId(null);
-                setActiveTab('dashboard');
-              }}
+              onCancel={() => navigateTo({ tab: 'dashboard', patientId: null })}
               onSuccess={handleSuccessPrescription}
             />
           )}
 
           {/* Clinic History Tab */}
           {activeTab === 'clinicHistory' && (
-            <ClinicHistory 
-              onSelectVisit={(visitId, billId) => {
-                setSelectedVisitId(visitId);
-                setSelectedBillId(billId);
-                setActiveTab('receipt');
-              }}
-              onSelectPatient={(patientId) => {
-                setSelectedPatientId(patientId);
-                setActiveTab('history');
-              }}
+            <ClinicHistory
+              onSelectVisit={(visitId, billId) => navigateTo({ tab: 'receipt', visitId, billId })}
+              onSelectPatient={(patientId) => navigateTo({ tab: 'history', patientId })}
             />
           )}
 
           {/* Billing Tab */}
           {activeTab === 'billing' && (
             <Billing
-              onPrintBillReceipt={(billId, visitId) => {
-                setSelectedVisitId(visitId);
-                setSelectedBillId(billId);
-                setActiveTab('receipt');
-              }}
+              onPrintBillReceipt={(billId, visitId) => navigateTo({ tab: 'receipt', visitId, billId })}
             />
           )}
 
@@ -437,11 +444,8 @@ export default function App() {
 
           {/* Follow ups Tab */}
           {activeTab === 'followup' && (
-            <FollowUp 
-              onSelectPatient={(patientId) => {
-                setSelectedPatientId(patientId);
-                setActiveTab('history');
-              }}
+            <FollowUp
+              onSelectPatient={(patientId) => navigateTo({ tab: 'history', patientId })}
             />
           )}
 
@@ -460,7 +464,7 @@ export default function App() {
             <ThermalReceipt 
               visitId={selectedVisitId}
               billId={selectedBillId}
-              onBack={() => setActiveTab('dashboard')}
+              onBack={() => navigateTo({ tab: 'dashboard' })}
             />
           )}
 
