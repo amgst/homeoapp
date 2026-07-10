@@ -1,0 +1,25 @@
+{
+  "name": "Haris Homeo Clinic",
+  "short_name": "Haris Homeo",
+  "description": "EHR Database & Digital Pharmacy System for Dr. Haris Mehmood",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F4F7F5",
+  "theme_color": "#0c331a",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

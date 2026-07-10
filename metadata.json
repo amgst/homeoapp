@@ -1,0 +1,6 @@
+{
+  "name": "Haris Homeo Clinic",
+  "description": "A professional medical management app for Haris Homeo Clinic, featuring patient records, prescription builder, medicine inventory, billing, follow-ups, and thermal receipt generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

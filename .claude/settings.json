@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(run)",
+      "Skill(run:*)",
+      "PowerShell(Get-Printer)",
+      "PowerShell(Get-Service -Name Spooler)",
+      "PowerShell(Get-Printer | Select-Object Name, DriverName, PortName, PrinterStatus | Format-Table -AutoSize; Write-Host \"--- USB devices ---\"; Get-PnpDevice -Class USB -Status OK | Select-Object FriendlyName, Status | Format-Table -AutoSize; Write-Host \"--- All PnP printer-ish devices ---\"; Get-PnpDevice | Where-Object { $_.FriendlyName -match 'print|thermal|POS|BT' } | Select-Object FriendlyName, Class, Status | Format-Table -AutoSize)",
+      "PowerShell(Get-PnpDevice | Where-Object { $_.FriendlyName -match 'Bluetooth' -or $_.Class -eq 'Ports' } | Select-Object FriendlyName, Class, Status, InstanceId | Format-Table -AutoSize -Wrap)"
+    ]
+  }
+}
