@@ -195,3 +195,25 @@ export async function printReceiptDirect(patient: Patient, visit: Visit, setting
   const data = buildReceiptEscPos(patient, visit, settings);
   await writeInChunks(characteristic, data);
 }
+
+// Prints a short test slip with no patient/visit data, for verifying the Bluetooth printer connection.
+export async function printTestReceipt(): Promise<void> {
+  if (!isWebBluetoothSupported()) {
+    throw new Error('Direct printing needs a browser with Web Bluetooth support (Chrome on Android or desktop).');
+  }
+
+  const { characteristic } = await getConnection();
+
+  const b = new ReceiptBuilder();
+  b.push(...INIT);
+  b.push(...ALIGN_CENTER).push(...BOLD_ON).push(...DOUBLE_SIZE_ON);
+  b.line('TEST PRINT');
+  b.push(...DOUBLE_SIZE_OFF).push(...BOLD_OFF);
+  b.line(new Date().toLocaleString());
+  b.line('Bluetooth printer connected OK');
+  b.line();
+  b.line();
+  b.line();
+
+  await writeInChunks(characteristic, b.build());
+}

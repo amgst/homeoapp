@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { 
-  Users, UserCheck, AlertTriangle, TrendingUp, Calendar, DollarSign, 
-  PlusCircle, Search, ClipboardList, Package, BarChart3, AlertOctagon 
+import {
+  Users, UserCheck, AlertTriangle, TrendingUp, Calendar, DollarSign,
+  PlusCircle, Search, ClipboardList, Package, BarChart3, AlertOctagon, Bluetooth
 } from 'lucide-react';
 import { getPatients, getVisits, getBills, getInventory } from '../utils/db';
 import { Patient, Visit, Bill, InventoryMedicine } from '../types';
+import { printTestReceipt } from '../utils/thermalPrinter';
 import MurakkabatChart from './MurakkabatChart';
 
 interface DashboardProps {
@@ -17,6 +18,22 @@ export default function Dashboard({ onAction, onSelectPatient }: DashboardProps)
   const [visits, setVisits] = useState<Visit[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [inventory, setInventory] = useState<InventoryMedicine[]>([]);
+
+  // TEMPORARY: quick Bluetooth printer connection test, remove once printing is confirmed working.
+  const [testPrinting, setTestPrinting] = useState(false);
+  const [testPrintError, setTestPrintError] = useState('');
+
+  const handleTestPrint = async () => {
+    setTestPrintError('');
+    setTestPrinting(true);
+    try {
+      await printTestReceipt();
+    } catch (err: any) {
+      setTestPrintError(err?.message || 'Test print failed.');
+    } finally {
+      setTestPrinting(false);
+    }
+  };
 
   useEffect(() => {
     setPatients(getPatients());
@@ -45,7 +62,26 @@ export default function Dashboard({ onAction, onSelectPatient }: DashboardProps)
 
   return (
     <div className="space-y-6 font-sans">
-      
+
+      {/* TEMPORARY: Bluetooth printer test button, remove once printing is confirmed working */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-blue-900">Test Bluetooth Printer</p>
+          <p className="text-xs text-blue-700">Sends a short test slip directly to the paired thermal printer, no patient data needed.</p>
+          {testPrintError && (
+            <p className="text-xs text-rose-600 font-semibold mt-1">{testPrintError}</p>
+          )}
+        </div>
+        <button
+          onClick={handleTestPrint}
+          disabled={testPrinting}
+          className="flex items-center justify-center space-x-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+        >
+          <Bluetooth className="h-4 w-4" />
+          <span>{testPrinting ? 'Printing...' : 'Test Print'}</span>
+        </button>
+      </div>
+
       {/* Alert Banners */}
       <div className="space-y-3">
         {lowStockCount > 0 && (
