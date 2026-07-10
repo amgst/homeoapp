@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
-  Printer, ArrowLeft, Send, Check, Heart, ShieldAlert, CheckCircle, Smartphone, Copy, Bluetooth
+  ArrowLeft, ShieldAlert, Bluetooth
 } from 'lucide-react';
 import { getVisits, getPatients, getBills, getSettings } from '../utils/db';
 import { Visit, Patient, Bill, ClinicSettings } from '../types';
-import { isWebSerialSupported, printReceiptDirect } from '../utils/thermalPrinter';
+import { printReceiptDirect } from '../utils/thermalPrinter';
 
 interface ThermalReceiptProps {
   visitId: string;
@@ -18,10 +18,7 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
   const [bill, setBill] = useState<Bill | null>(null);
   const [settings, setSettings] = useState<ClinicSettings | null>(null);
   
-  // Printing statuses
-  const [printed, setPrinted] = useState(false);
-  const [whatsappSent, setWhatsappSent] = useState(false);
-  const [copied, setCopied] = useState(false);
+  // Printing status
   const [directPrinting, setDirectPrinting] = useState(false);
   const [directPrintError, setDirectPrintError] = useState('');
 
@@ -66,12 +63,6 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
     diagnosis: ''
   });
 
-  const handlePrint = () => {
-    setPrinted(true);
-    window.print();
-    setTimeout(() => setPrinted(false), 2000);
-  };
-
   const handleDirectPrint = async () => {
     if (!visit) return;
     setDirectPrintError('');
@@ -83,73 +74,6 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
     } finally {
       setDirectPrinting(false);
     }
-  };
-
-  const handleCopyText = () => {
-    if (!visit) return;
-
-    const separator = "--------------------------------";
-    const dSeparator = "================================";
-    
-    let text = "";
-    text += `${dSeparator}\n`;
-    text += `   ${activeSettings.clinicName.toUpperCase()}\n`;
-    text += `${dSeparator}\n`;
-    text += `Doctor: ${activeSettings.doctorName}\n`;
-    text += `Address: ${activeSettings.clinicAddress}\n`;
-    text += `Phone: ${activeSettings.phoneNumber}\n`;
-    text += `${separator}\n`;
-    text += `PATIENT: ${activePatient.fullName.toUpperCase()}\n`;
-    text += `PATIENT ID: ${activePatient.id}\n`;
-    text += `AGE/GENDER: ${activePatient.age} Y / ${activePatient.gender.toUpperCase()}\n`;
-    text += `DATE: ${visit.visitDate}\n`;
-    text += `VISIT ID: ${visit.id}\n`;
-    text += `${separator}\n`;
-    text += `Rx - Homeopathic Prescription:\n`;
-    text += `${separator}\n`;
-
-    visit.medicines.forEach((m, idx) => {
-      text += `${idx + 1}. ${m.name} ${m.potency}\n`;
-      text += `   Form: ${m.form} (${m.quantity})\n`;
-      text += `   Duration: ${m.duration}\n`;
-      
-      const timings = [];
-      if (m.timing.morning) timings.push("Morning");
-      if (m.timing.afternoon) timings.push("Afternoon");
-      if (m.timing.evening) timings.push("Evening");
-      if (m.timing.night) timings.push("Night");
-      text += `   Schedule: ${timings.join(" - ")}\n`;
-      text += `   Timing: ${m.foodInstructions}\n`;
-      if (m.specialInstructions) {
-        text += `   Instruction: ${m.specialInstructions}\n`;
-      }
-      text += `\n`;
-    });
-
-    if (visit.doctorNotes) {
-      text += `DOCTOR NOTES:\n"${visit.doctorNotes}"\n\n`;
-    }
-
-    if (visit.followUpDate) {
-      text += `NEXT VISIT: ${visit.followUpDate}\n\n`;
-    }
-
-    text += `${separator}\n`;
-    text += `Thank You for Choosing Us\n`;
-    text += `Restoring health naturally\n`;
-    text += `${dSeparator}\n`;
-
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSendWhatsApp = () => {
-    setWhatsappSent(true);
-    setTimeout(() => {
-      alert(`Simulating prescription and digital receipt delivery to ${activePatient.fullName} (${activePatient.mobileNumber || 'no mobile number'}) via WhatsApp integration.`);
-      setWhatsappSent(false);
-    }, 1200);
   };
 
   // If the prescription visit record is missing or deleted, show a beautiful error card with an active Escape button
@@ -187,44 +111,14 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
         </button>
 
         <div className="flex items-center gap-2">
-          <button 
-            onClick={handleCopyText}
-            className={`flex items-center space-x-1.5 px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              copied 
-                ? 'bg-green-100 text-green-800 border-green-200' 
-                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-            }`}
-          >
-            <Copy className="h-4 w-4" />
-            <span>{copied ? 'Copied to Clipboard!' : 'Copy Text for Bluetooth Printer'}</span>
-          </button>
-
-          <button 
-            onClick={handleSendWhatsApp}
-            className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-          >
-            <Smartphone className="h-4 w-4" />
-            <span>{whatsappSent ? 'Sending...' : 'Send WhatsApp Prescription'}</span>
-          </button>
-
-          {isWebSerialSupported() && (
-            <button
-              onClick={handleDirectPrint}
-              disabled={directPrinting}
-              className="flex items-center space-x-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
-              title="Send raw ESC/POS data directly to the paired Bluetooth printer's serial port, no OS print dialog"
-            >
-              <Bluetooth className="h-4 w-4" />
-              <span>{directPrinting ? 'Sending to Printer...' : 'Print via Bluetooth (Direct)'}</span>
-            </button>
-          )}
-
           <button
-            onClick={handlePrint}
-            className="flex items-center space-x-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
+            onClick={handleDirectPrint}
+            disabled={directPrinting}
+            className="flex items-center space-x-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
+            title="Send raw ESC/POS data directly to the paired Bluetooth thermal printer"
           >
-            <Printer className="h-4 w-4" />
-            <span>{printed ? 'Spooling Printer...' : 'Print Thermal 80mm'}</span>
+            <Bluetooth className="h-4 w-4" />
+            <span>{directPrinting ? 'Sending to Printer...' : 'Print Receipt'}</span>
           </button>
         </div>
       </div>
@@ -234,17 +128,6 @@ export default function ThermalReceipt({ visitId, billId, onBack }: ThermalRecei
           {directPrintError}
         </div>
       )}
-
-      {/* Urdu instructions card for mobile Bluetooth thermal printers */}
-      <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2 no-print font-sans max-w-3xl mx-auto">
-        <h4 className="text-xs font-black text-slate-700 flex items-center space-x-2">
-          <Smartphone className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span>موبائل بلوٹوتھ تھرمل پرنٹر کے لیے رہنمائی (Mobile Thermal Printing Guide):</span>
-        </h4>
-        <p className="text-xs text-slate-600 leading-relaxed text-right font-semibold" dir="rtl">
-          اگر آپ موبائل پر ہیں اور آپ کا بلوٹوتھ تھرمل پرنٹر (Bluetooth Thermal Printer) براہِ راست پرنٹ نہیں کر رہا، تو اوپر موجود <strong className="text-emerald-700">"Copy Text for Bluetooth Printer"</strong> کا بٹن دبائیں۔ پھر پلے اسٹور سے کوئی بھی فری پرنٹنگ ایپ جیسے <strong className="text-blue-700">"RawBT"</strong> یا <strong className="text-blue-700">"Bluetooth Print"</strong> ڈاؤن لوڈ کر کے یہ کاپی شدہ نسخہ وہاں پیسٹ (Paste) کریں اور باآسانی پرنٹ نکال لیں۔
-        </p>
-      </div>
 
       {/* Main receipt body centering card */}
       <div className="flex justify-center select-none">

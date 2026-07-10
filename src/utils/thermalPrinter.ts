@@ -12,13 +12,26 @@ const DOUBLE_SIZE_ON = [GS, 0x21, 0x11];
 const DOUBLE_SIZE_OFF = [GS, 0x21, 0x00];
 const LINE_FEED = [0x0a];
 
-export function isWebSerialSupported(): boolean {
-  return typeof navigator !== 'undefined' && 'serial' in navigator && !!navigator.serial;
-}
+const WRITE_CHUNK_SIZE = 20;
 
-function parseBaudRate(printerAddress?: string): number {
-  const match = printerAddress?.match(/(\d{3,7})\s*baud/i);
-  return match ? parseInt(match[1], 10) : 9600;
+const OPTIONAL_SERVICE_UUIDS: BluetoothServiceUUID[] = [
+  0xFFE0,
+  0xFF00,
+  0x18F0,
+  '0000ffe0-0000-1000-8000-00805f9b34fb',
+  '0000ff00-0000-1000-8000-00805f9b34fb',
+  '000018f0-0000-1000-8000-00805f9b34fb'
+];
+
+type PrinterConnection = {
+  device: BluetoothDevice;
+  characteristic: BluetoothRemoteGATTCharacteristic;
+};
+
+let cachedConnection: PrinterConnection | null = null;
+
+export function isWebBluetoothSupported(): boolean {
+  return typeof navigator !== 'undefined' && 'bluetooth' in navigator && !!navigator.bluetooth;
 }
 
 class ReceiptBuilder {
@@ -120,23 +133,65 @@ export function buildReceiptEscPos(patient: Patient, visit: Visit, settings: Cli
   return b.build();
 }
 
+async function pickWritableCharacteristic(device: BluetoothDevice): Promise<BluetoothRemoteGATTCharacteristic> {
+  const server = await device.gatt?.connect();
+  if (!server) {
+    throw new Error('Bluetooth connection failed.');
+  }
+  const services = await server.getPrimaryServices();
+  for (const service of services) {
+    const characteristics = await service.getCharacteristics();
+    for (const characteristic of characteristics) {
+      if (characteristic.properties.write || characteristic.properties.writeWithoutResponse) {
+        return characteristic;
+      }
+    }
+  }
+  throw new Error('No writable characteristic found on this printer.');
+}
+
+async function getConnection(): Promise<PrinterConnection> {
+  if (cachedConnection?.device?.gatt?.connected) return cachedConnection;
+
+  if (navigator.bluetooth.getDevices) {
+    const devices = await navigator.bluetooth.getDevices();
+    if (devices.length > 0) {
+      const device = devices[0];
+      const characteristic = await pickWritableCharacteristic(device);
+      cachedConnection = { device, characteristic };
+      return cachedConnection;
+    }
+  }
+
+  const device = await navigator.bluetooth.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: OPTIONAL_SERVICE_UUIDS
+  });
+
+  const characteristic = await pickWritableCharacteristic(device);
+  cachedConnection = { device, characteristic };
+  return cachedConnection;
+}
+
+async function writeInChunks(characteristic: BluetoothRemoteGATTCharacteristic, data: Uint8Array): Promise<void> {
+  let offset = 0;
+  while (offset < data.length) {
+    const chunk = data.slice(offset, offset + WRITE_CHUNK_SIZE);
+    if (characteristic.properties.writeWithoutResponse) {
+      await characteristic.writeValueWithoutResponse(chunk);
+    } else {
+      await characteristic.writeValue(chunk);
+    }
+    offset += WRITE_CHUNK_SIZE;
+  }
+}
+
 export async function printReceiptDirect(patient: Patient, visit: Visit, settings: ClinicSettings): Promise<void> {
-  if (!isWebSerialSupported()) {
-    throw new Error('Direct printing needs Chrome or Edge on desktop (Web Serial API not available).');
+  if (!isWebBluetoothSupported()) {
+    throw new Error('Direct printing needs a browser with Web Bluetooth support (Chrome on Android or desktop).');
   }
 
-  const serial = navigator.serial!;
-  const grantedPorts = await serial.getPorts();
-  const port = grantedPorts[0] || (await serial.requestPort());
-
+  const { characteristic } = await getConnection();
   const data = buildReceiptEscPos(patient, visit, settings);
-
-  await port.open({ baudRate: parseBaudRate(settings.printerAddress) });
-  const writer = port.writable!.getWriter();
-  try {
-    await writer.write(data);
-  } finally {
-    writer.releaseLock();
-    await port.close();
-  }
+  await writeInChunks(characteristic, data);
 }
